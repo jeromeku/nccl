@@ -20,6 +20,7 @@ set(LLVM_IR_FILE ${OBJDIR}/libnccl_device.ll)
 set(FINAL_BC ${LIBDIR}/libnccl_device.bc)
 
 set(WRAPPER_HEADER ${INCLUDEDIR}/nccl_device_wrapper.h)
+set(CLEAN_LLVM_IR_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/clean_llvm_ir.py)
 
 # Build configuration
 # Select GPU arch and C++ standard based on CUDA Toolkit version
@@ -31,11 +32,20 @@ endif()
 
 set(BITCODE_CXX_STD gnu++17 CACHE STRING "C++ standard for LLVM IR")
 
-# Find required tools
-find_program(CLANG_EXECUTABLE clang REQUIRED)
-find_program(OPT_EXECUTABLE opt REQUIRED)
-find_program(LLVM_DIS_EXECUTABLE llvm-dis REQUIRED)
-find_program(LLVM_AS_EXECUTABLE llvm-as REQUIRED)
+# Find required tools. Clear stale cached paths first so versioned LLVM installs
+# without unversioned /usr/bin wrappers can recover on reconfigure.
+macro(find_llvm_tool output_var)
+    if(DEFINED ${output_var} AND NOT EXISTS "${${output_var}}")
+        unset(${output_var} CACHE)
+        unset(${output_var})
+    endif()
+    find_program(${output_var} NAMES ${ARGN} REQUIRED)
+endmacro()
+
+find_llvm_tool(CLANG_EXECUTABLE clang clang-22)
+find_llvm_tool(OPT_EXECUTABLE opt opt-22)
+find_llvm_tool(LLVM_DIS_EXECUTABLE llvm-dis llvm-dis-22)
+find_llvm_tool(LLVM_AS_EXECUTABLE llvm-as llvm-as-22)
 
 # Include paths
 set(NCCL_INCLUDES
@@ -45,10 +55,22 @@ set(NCCL_INCLUDES
     -I${CMAKE_SOURCE_DIR}/src/device
 )
 
-set(CUDA_INCLUDES
-    -I${CUDAToolkit_INCLUDE_DIRS}
-    -I${CUDAToolkit_INCLUDE_DIRS}/cccl
-)
+set(CUDA_INCLUDES)
+foreach(cuda_include_dir IN LISTS CUDAToolkit_INCLUDE_DIRS)
+    list(APPEND CUDA_INCLUDES -I${cuda_include_dir})
+    if(EXISTS "${cuda_include_dir}/cccl")
+        list(APPEND CUDA_INCLUDES -I${cuda_include_dir}/cccl)
+    endif()
+endforeach()
+list(REMOVE_DUPLICATES CUDA_INCLUDES)
+
+set(CLANG_CUDA_PATH "${CUDAToolkit_LIBRARY_ROOT}")
+if(NOT CLANG_CUDA_PATH)
+    set(CLANG_CUDA_PATH "${CUDAToolkit_ROOT}")
+endif()
+if(NOT CLANG_CUDA_PATH AND CUDAToolkit_BIN_DIR)
+    get_filename_component(CLANG_CUDA_PATH "${CUDAToolkit_BIN_DIR}" DIRECTORY)
+endif()
 
 # Empty stubs for headers clang's CUDA wrapper unconditionally includes but
 # CUDA 13 removed (e.g. texture_fetch_functions.h). NCCL device code doesn't
@@ -61,7 +83,7 @@ set(CLANG_COMPAT_INCLUDES
 set(COMMON_CLANG_FLAGS
     -std=${BITCODE_CXX_STD}
     -x cuda
-    --cuda-path=${CUDAToolkit_ROOT_DIR}
+    --cuda-path=${CLANG_CUDA_PATH}
     --cuda-device-only
     --cuda-gpu-arch=${BITCODE_LIB_ARCH}
     ${CLANG_COMPAT_INCLUDES}
@@ -117,12 +139,10 @@ add_custom_command(
 add_custom_command(
     OUTPUT ${LLVM_IR_FILE}
     COMMAND ${LLVM_DIS_EXECUTABLE} ${OPTIMIZED_BC} -o ${LLVM_IR_FILE}.tmp
-    COMMAND ${CMAKE_COMMAND} -E echo "Cleaning LLVM IR (removing nvvm-reflect-ftz)..."
-    COMMAND bash -c "myVar=$$(cat ${LLVM_IR_FILE}.tmp | grep -E '!([0-9]+) = !\\{[^\"]*\"nvvm-reflect-ftz\"' | cut -d ' ' -f 1)\; awk '!/nvvm-reflect-ftz/' ${LLVM_IR_FILE}.tmp | sed \"/^!llvm\\.module\\.flags = /s/$$myVar, //\" > ${LLVM_IR_FILE}.tmp2"
-    COMMAND ${CMAKE_COMMAND} -E echo "Cleaning LLVM IR (removing function alignment attributes)..."
-    COMMAND bash -c "sed '/^define/s/ align [0-9]\\+//g' ${LLVM_IR_FILE}.tmp2 > ${LLVM_IR_FILE}"
-    COMMAND ${CMAKE_COMMAND} -E remove ${LLVM_IR_FILE}.tmp ${LLVM_IR_FILE}.tmp2
-    DEPENDS ${OPTIMIZED_BC}
+    COMMAND ${CMAKE_COMMAND} -E echo "Cleaning LLVM IR..."
+    COMMAND ${Python3_EXECUTABLE} ${CLEAN_LLVM_IR_SCRIPT} ${LLVM_IR_FILE}.tmp ${LLVM_IR_FILE}
+    COMMAND ${CMAKE_COMMAND} -E remove ${LLVM_IR_FILE}.tmp
+    DEPENDS ${OPTIMIZED_BC} ${CLEAN_LLVM_IR_SCRIPT}
     COMMENT "Generating LLVM IR..."
     VERBATIM
 )
