@@ -1,0 +1,103 @@
+CompileFlags:
+  CompilationDatabase: build
+  Compiler: /usr/lib/llvm-22/bin/clang++
+  Add:
+    - -std=c++17
+    - --cuda-path=/usr/local/cuda
+    - --cuda-gpu-arch=sm_90
+    - -DNCCL_USE_CMAKE
+    - -DNCCL_OS_LINUX
+    - -DNCCL_COMPILER_GCC
+    - -DNCCL_GIN_PROXY_ENABLE=1
+    - -DNCCL_MAJOR=2
+    - -DNCCL_MINOR=30
+    - -DNCCL_PATCH=7
+    - -DNCCL_VERSION_CODE=23007
+    - -DCUDA_MAJOR=13
+    - -DCUDA_MINOR=1
+    - -DPROFAPI
+    - -DDOCA_VERBS_USE_CUDA_WRAPPER
+    - -DDOCA_VERBS_USE_NET_WRAPPER
+    - -DTORCH_EXTENSION_NAME=_C
+    - -I/home/jerome/ep-comms/nccl/build/include
+    - -I/home/jerome/ep-comms/nccl/build/include/nccl_device
+    - -I/home/jerome/ep-comms/nccl/build/include/nccl_ep
+    - -I/home/jerome/ep-comms/nccl/build/obj/include
+    - -I/home/jerome/ep-comms/nccl/src
+    - -I/home/jerome/ep-comms/nccl/src/device
+    - -I/home/jerome/ep-comms/nccl/src/include
+    - -I/home/jerome/ep-comms/nccl/src/include/plugin
+    - -I/home/jerome/ep-comms/nccl/src/transport/net_ib/gdaki/doca-gpunetio/include
+    - -I/home/jerome/ep-comms/nccl/contrib/nccl_ep
+    - -I/home/jerome/ep-comms/nccl/contrib/nccl_ep/include
+    - -I/home/jerome/ep-comms/nccl/contrib/nccl_ep/device
+    - -I/home/jerome/ep-comms/nccl/contrib/nccl_ep/tests
+    - -I/home/jerome/ep-comms/nccl/contrib/nccl_m2n/src
+    - -I/home/jerome/ep-comms/nccl/contrib/nccl_m2n/benchmarks
+    - -I/home/jerome/ep-comms/nccl/contrib/nccl_m2n/tests
+    - -I/home/jerome/ep-comms/nccl/contrib/nccl_m2n/third_party
+    - -I/home/jerome/ep-comms/nccl/contrib/nccl_ubx/csrc/include
+    - -I/home/jerome/ep-comms/nccl/contrib/nccl_checkpoint
+    - -I/home/jerome/ep-comms/nccl/contrib/nccl_checkpoint/build/include/nccl_checkpoint
+    - -I/home/jerome/ep-comms/nccl/contrib/custom_algos/allreduce
+    - -I/home/jerome/ep-comms/nccl/contrib/custom_algos/alltoall
+    - -isystem
+    - /usr/local/cuda/targets/x86_64-linux/include
+    - -isystem
+    - /usr/local/cuda/targets/x86_64-linux/include/cccl
+    - -isystem
+    - /usr/local/cuda/targets/x86_64-linux/include/cccl/cccl
+    - -isystem
+    - /usr/local/cuda/include
+    - -isystem
+    - /usr/mpi/gcc/openmpi-4.1.9a1/include
+    - -isystem
+    - /home/jerome/ep-comms/nccl/.venv/lib/python3.12/site-packages/torch/include
+    - -isystem
+    - /home/jerome/ep-comms/nccl/.venv/lib/python3.12/site-packages/torch/include/torch/csrc/api/include
+    - -isystem
+    - /usr/include/python3.12
+  Remove:
+    - -forward-unknown-to-host-compiler
+    - --options-file
+    - CMakeFiles/*/includes_CUDA.rsp
+    - --expt-*
+    - --generate-code=*
+    - -gencode=*
+    - -Xptxas
+    - -maxrregcount=*
+    - -Xfatbin
+    - -compress-all
+    - -Xcompiler=*
+    - -Xcompiler
+    - --compiler-options=*
+    - --ptxas-options=*
+    - -ccbin
+    - -rdc=true
+    - -fmacro-prefix-map=*
+
+Diagnostics:
+  Suppress:
+    - unknown-cuda-version
+
+---
+If:
+  PathMatch: .*\.cu(h)?$
+CompileFlags:
+  Add:
+    - -x
+    - cuda
+    - -include
+    - /home/jerome/ep-comms/nccl/.clangd-prelude.h
+
+---
+If:
+  PathMatch: contrib/nccl_checkpoint/.*
+CompileFlags:
+  Add:
+    - -include
+    - /home/jerome/ep-comms/nccl/src/include/checks.h
+    - -include
+    - /home/jerome/ep-comms/nccl/src/include/comm.h
+    - -include
+    - /home/jerome/ep-comms/nccl/build/include/nccl_device/impl/core__types.h
